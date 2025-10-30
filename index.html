@@ -1,0 +1,1581 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes">
+    
+    <!-- PWA Meta Tags -->
+    <meta name="application-name" content="TaskMaster AI">
+    <meta name="description" content="Asistente inteligente de productividad con gestión de tareas, deadlines y notificaciones WhatsApp">
+    <meta name="theme-color" content="#764ba2">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="TaskMaster AI">
+    
+    <!-- Android -->
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="theme-color" content="#764ba2">
+    
+    <!-- iOS -->
+    <link rel="apple-touch-icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 180 180'%3E%3Cdefs%3E%3ClinearGradient id='grad' x1='0%25' y1='0%25' x2='100%25' y2='100%25'%3E%3Cstop offset='0%25' style='stop-color:%23667eea;stop-opacity:1' /%3E%3Cstop offset='100%25' style='stop-color:%23764ba2;stop-opacity:1' /%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='180' height='180' rx='40' fill='url(%23grad)'/%3E%3Ctext x='90' y='120' font-size='100' text-anchor='middle' fill='white'%3E🤖%3C/text%3E%3C/svg%3E">
+    
+    <!-- Manifest -->
+    <link rel="manifest" href="manifest.json">
+    
+    <!-- Favicon -->
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E🤖%3C/text%3E%3C/svg%3E">
+    
+    <title>TaskMaster AI - Asistente Inteligente de Productividad</title>
+    
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        * {
+            font-family: 'Inter', sans-serif;
+        }
+        body {
+            margin: 0;
+            padding: 0;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+        }
+        .glass-effect {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+        }
+        .task-card {
+            transition: all 0.3s ease;
+        }
+        .task-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+        }
+        .priority-high {
+            border-left: 4px solid #ef4444;
+        }
+        .priority-medium {
+            border-left: 4px solid #f59e0b;
+        }
+        .priority-low {
+            border-left: 4px solid #10b981;
+        }
+        .ai-suggestion {
+            animation: slideIn 0.5s ease;
+        }
+        @keyframes slideIn {
+            from {
+                opacity: 0;
+                transform: translateX(-20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateX(0);
+            }
+        }
+        .notification-badge {
+            animation: pulse 2s infinite;
+        }
+        @keyframes pulse {
+            0%, 100% {
+                opacity: 1;
+            }
+            50% {
+                opacity: 0.6;
+            }
+        }
+        .stats-card {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+        .deadline-critical {
+            animation: urgentPulse 1.5s infinite;
+        }
+        @keyframes urgentPulse {
+            0%, 100% {
+                box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7);
+            }
+            50% {
+                box-shadow: 0 0 0 10px rgba(239, 68, 68, 0);
+            }
+        }
+        .deadline-overdue {
+            animation: shake 0.5s infinite;
+        }
+        @keyframes shake {
+            0%, 100% { transform: translateX(0); }
+            25% { transform: translateX(-5px); }
+            75% { transform: translateX(5px); }
+        }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect, useRef } = React;
+
+        // Componente principal
+        function TaskMasterAI() {
+            const [tasks, setTasks] = useState([]);
+            const [emails, setEmails] = useState([]);
+            const [notifications, setNotifications] = useState([]);
+            const [aiSuggestions, setAiSuggestions] = useState([]);
+            const [stats, setStats] = useState({
+                completedToday: 0,
+                pendingTasks: 0,
+                productivity: 0,
+                streak: 0
+            });
+            const [activeTab, setActiveTab] = useState('dashboard');
+            const [newTask, setNewTask] = useState({ title: '', description: '', category: 'trabajo', deadline: '' });
+            const [learningData, setLearningData] = useState({
+                patterns: [],
+                preferences: {},
+                performanceHistory: []
+            });
+            const [userProfile, setUserProfile] = useState({
+                name: '',
+                email: '',
+                phone: '',
+                whatsappNumber: '',
+                enableWhatsAppNotifications: false,
+                notificationPreferences: {
+                    overdue: true,
+                    critical: true,
+                    urgent: false,
+                    daily: true
+                }
+            });
+            const [showProfileEdit, setShowProfileEdit] = useState(false);
+
+            // Inicialización de datos de ejemplo
+            useEffect(() => {
+                loadUserProfile();
+                initializeApp();
+                const interval = setInterval(checkNotifications, 30000);
+                
+                // Enviar resumen diario a las 8:00 AM
+                const now = new Date();
+                if (now.getHours() === 8 && now.getMinutes() === 0) {
+                    sendDailySummary();
+                }
+                
+                return () => clearInterval(interval);
+            }, []);
+
+            useEffect(() => {
+                analyzePatternsAndSuggest();
+                calculateStats();
+            }, [tasks]);
+
+            const initializeApp = () => {
+                const now = new Date();
+                const tomorrow = new Date(now.getTime() + 24 * 60 * 60 * 1000);
+                const twoDays = new Date(now.getTime() + 2 * 24 * 60 * 60 * 1000);
+                const fiveDays = new Date(now.getTime() + 5 * 24 * 60 * 60 * 1000);
+                const tenHours = new Date(now.getTime() + 10 * 60 * 60 * 1000);
+                
+                const sampleTasks = [
+                    {
+                        id: 1,
+                        title: 'Revisar emails urgentes',
+                        description: 'Responder emails de clientes prioritarios',
+                        priority: 'high',
+                        category: 'emails',
+                        completed: false,
+                        createdAt: new Date(),
+                        deadline: tenHours,
+                        estimatedTime: 30,
+                        aiScore: 95
+                    },
+                    {
+                        id: 2,
+                        title: 'Reunión con equipo',
+                        description: 'Sincronización semanal del equipo',
+                        priority: 'high',
+                        category: 'reuniones',
+                        completed: false,
+                        createdAt: new Date(),
+                        deadline: tomorrow,
+                        estimatedTime: 60,
+                        aiScore: 90
+                    },
+                    {
+                        id: 3,
+                        title: 'Actualizar proyecto X',
+                        description: 'Implementar nuevas funcionalidades',
+                        priority: 'medium',
+                        category: 'desarrollo',
+                        completed: false,
+                        createdAt: new Date(),
+                        deadline: fiveDays,
+                        estimatedTime: 120,
+                        aiScore: 75
+                    }
+                ];
+
+                const sampleEmails = [
+                    {
+                        id: 1,
+                        from: 'cliente@empresa.com',
+                        subject: 'Urgente: Presupuesto proyecto',
+                        priority: 'high',
+                        unread: true,
+                        timestamp: new Date()
+                    },
+                    {
+                        id: 2,
+                        from: 'equipo@interno.com',
+                        subject: 'Actualización sprint',
+                        priority: 'medium',
+                        unread: true,
+                        timestamp: new Date()
+                    }
+                ];
+
+                setTasks(sampleTasks);
+                setEmails(sampleEmails);
+                generateInitialSuggestions();
+            };
+
+            const generateInitialSuggestions = () => {
+                setAiSuggestions([
+                    {
+                        id: 1,
+                        type: 'priority',
+                        message: 'Basado en tu historial, deberías comenzar con los emails urgentes (30 min estimados)',
+                        confidence: 95
+                    },
+                    {
+                        id: 2,
+                        type: 'optimization',
+                        message: 'Considera agrupar todas las reuniones en la tarde para mantener la mañana productiva',
+                        confidence: 85
+                    },
+                    {
+                        id: 3,
+                        type: 'reminder',
+                        message: 'Tienes 3 tareas pendientes de ayer. ¿Quieres repriorizarlas?',
+                        confidence: 90
+                    }
+                ]);
+            };
+
+            const analyzePatternsAndSuggest = () => {
+                const completedTasks = tasks.filter(t => t.completed);
+                const pendingTasks = tasks.filter(t => !t.completed);
+
+                // Análisis de patrones
+                const patterns = {
+                    mostProductiveCategory: getMostFrequentCategory(completedTasks),
+                    avgCompletionTime: calculateAvgCompletionTime(completedTasks),
+                    priorityAccuracy: calculatePriorityAccuracy(completedTasks)
+                };
+
+                // Generar sugerencias inteligentes
+                const newSuggestions = [];
+
+                // Analizar tareas por urgencia de deadline
+                const now = new Date();
+                const criticalTasks = pendingTasks.filter(t => {
+                    if (!t.deadline) return false;
+                    const timeInfo = getTimeUntilDeadline(t.deadline);
+                    return timeInfo && timeInfo.hours < 24 && !timeInfo.overdue;
+                });
+
+                const overdueTasks = pendingTasks.filter(t => {
+                    if (!t.deadline) return false;
+                    const timeInfo = getTimeUntilDeadline(t.deadline);
+                    return timeInfo && timeInfo.overdue;
+                });
+
+                // Sugerencia para tareas vencidas
+                if (overdueTasks.length > 0) {
+                    newSuggestions.push({
+                        id: Date.now(),
+                        type: 'warning',
+                        message: `⚠️ CRÍTICO: Tienes ${overdueTasks.length} tarea(s) vencida(s). Necesitan atención inmediata o reprogramación.`,
+                        confidence: 98
+                    });
+                }
+
+                // Sugerencia para tareas críticas (< 24h)
+                if (criticalTasks.length > 0) {
+                    const taskTitles = criticalTasks.slice(0, 2).map(t => `"${t.title}"`).join(', ');
+                    newSuggestions.push({
+                        id: Date.now() + 1,
+                        type: 'priority',
+                        message: `🔥 URGENTE: ${criticalTasks.length} tarea(s) vencen en menos de 24h: ${taskTitles}. Recomiendo priorizarlas ahora.`,
+                        confidence: 96
+                    });
+                }
+
+                if (pendingTasks.length > 5) {
+                    newSuggestions.push({
+                        id: Date.now() + 2,
+                        type: 'warning',
+                        message: `Tienes ${pendingTasks.length} tareas pendientes. Considera delegar o posponer tareas de baja prioridad.`,
+                        confidence: 88
+                    });
+                }
+
+                const highPriorityTasks = pendingTasks.filter(t => t.priority === 'high');
+                if (highPriorityTasks.length > 3) {
+                    newSuggestions.push({
+                        id: Date.now() + 3,
+                        type: 'priority',
+                        message: 'Demasiadas tareas de alta prioridad. El AI recomienda enfocarte en las 3 más importantes según deadline.',
+                        confidence: 92
+                    });
+                }
+
+                // Sugerencia sobre organización del tiempo
+                const tasksWithDeadline = pendingTasks.filter(t => t.deadline);
+                if (tasksWithDeadline.length > 0) {
+                    const totalEstimatedTime = tasksWithDeadline.reduce((sum, t) => sum + (t.estimatedTime || 0), 0);
+                    const hoursNeeded = Math.ceil(totalEstimatedTime / 60);
+                    newSuggestions.push({
+                        id: Date.now() + 4,
+                        type: 'optimization',
+                        message: `💡 Necesitas aproximadamente ${hoursNeeded} horas para completar todas las tareas con deadline. Planifica tu tiempo.`,
+                        confidence: 85
+                    });
+                }
+
+                if (newSuggestions.length > 0) {
+                    setAiSuggestions(prev => [...newSuggestions, ...prev.slice(0, 4)]);
+                }
+            };
+
+            const getMostFrequentCategory = (tasks) => {
+                if (tasks.length === 0) return 'trabajo';
+                const categories = tasks.map(t => t.category);
+                return categories.sort((a, b) =>
+                    categories.filter(c => c === a).length - categories.filter(c => c === b).length
+                ).pop();
+            };
+
+            const calculateAvgCompletionTime = (tasks) => {
+                if (tasks.length === 0) return 0;
+                const total = tasks.reduce((sum, t) => sum + (t.estimatedTime || 0), 0);
+                return Math.round(total / tasks.length);
+            };
+
+            const calculatePriorityAccuracy = (tasks) => {
+                return tasks.length > 0 ? Math.round((tasks.length / (tasks.length + 2)) * 100) : 0;
+            };
+
+            const calculateStats = () => {
+                const completed = tasks.filter(t => t.completed);
+                const pending = tasks.filter(t => !t.completed);
+                const today = new Date().toDateString();
+                const completedToday = completed.filter(t => 
+                    new Date(t.completedAt).toDateString() === today
+                ).length;
+
+                const productivity = tasks.length > 0 
+                    ? Math.round((completed.length / tasks.length) * 100) 
+                    : 0;
+
+                setStats({
+                    completedToday,
+                    pendingTasks: pending.length,
+                    productivity,
+                    streak: calculateStreak(completed)
+                });
+            };
+
+            const calculateStreak = (completedTasks) => {
+                return Math.min(completedTasks.length, 7);
+            };
+
+            // Calcular tiempo restante hasta deadline
+            const getTimeUntilDeadline = (deadline) => {
+                if (!deadline) return null;
+                const now = new Date();
+                const deadlineDate = new Date(deadline);
+                const diff = deadlineDate - now;
+                
+                const hours = Math.floor(diff / (1000 * 60 * 60));
+                const days = Math.floor(hours / 24);
+                const remainingHours = hours % 24;
+                
+                if (diff < 0) {
+                    return { overdue: true, text: '¡VENCIDA!', hours: 0, days: 0 };
+                }
+                
+                if (days > 0) {
+                    return { overdue: false, text: `${days}d ${remainingHours}h`, hours, days };
+                }
+                
+                return { overdue: false, text: `${hours}h`, hours, days };
+            };
+
+            // Determinar urgencia y color basado en tiempo restante
+            const getDeadlineUrgency = (deadline) => {
+                if (!deadline) return { level: 'none', color: 'gray', bgColor: 'bg-gray-100', textColor: 'text-gray-600' };
+                
+                const timeInfo = getTimeUntilDeadline(deadline);
+                
+                if (timeInfo.overdue) {
+                    return { 
+                        level: 'overdue', 
+                        color: 'red', 
+                        bgColor: 'bg-red-100 border-2 border-red-300', 
+                        textColor: 'text-red-700',
+                        badgeColor: 'bg-red-600 text-white'
+                    };
+                }
+                
+                // Menos de 24 horas - CRÍTICO
+                if (timeInfo.hours < 24) {
+                    return { 
+                        level: 'critical', 
+                        color: 'red', 
+                        bgColor: 'bg-red-50 border-l-4 border-red-500', 
+                        textColor: 'text-red-600',
+                        badgeColor: 'bg-red-500 text-white'
+                    };
+                }
+                
+                // 1-3 días - URGENTE
+                if (timeInfo.days <= 3) {
+                    return { 
+                        level: 'urgent', 
+                        color: 'orange', 
+                        bgColor: 'bg-orange-50 border-l-4 border-orange-500', 
+                        textColor: 'text-orange-600',
+                        badgeColor: 'bg-orange-500 text-white'
+                    };
+                }
+                
+                // 3-7 días - PRÓXIMO
+                if (timeInfo.days <= 7) {
+                    return { 
+                        level: 'upcoming', 
+                        color: 'yellow', 
+                        bgColor: 'bg-yellow-50 border-l-4 border-yellow-500', 
+                        textColor: 'text-yellow-700',
+                        badgeColor: 'bg-yellow-500 text-white'
+                    };
+                }
+                
+                // Más de 7 días - NORMAL
+                return { 
+                    level: 'normal', 
+                    color: 'green', 
+                    bgColor: 'bg-green-50 border-l-4 border-green-500', 
+                    textColor: 'text-green-600',
+                    badgeColor: 'bg-green-500 text-white'
+                };
+            };
+
+            const checkNotifications = () => {
+                const now = new Date();
+                const unreadEmails = emails.filter(e => e.unread).length;
+                
+                if (unreadEmails > 5) {
+                    addNotification(`Tienes ${unreadEmails} emails sin leer. ¿Quieres que los ordene por prioridad?`, 'email');
+                }
+
+                const overdueTasks = tasks.filter(t => {
+                    if (!t.completed && t.deadline) {
+                        const timeInfo = getTimeUntilDeadline(t.deadline);
+                        return timeInfo?.overdue;
+                    }
+                    return false;
+                }).length;
+
+                if (overdueTasks > 0) {
+                    addNotification(`⚠️ ${overdueTasks} tarea(s) vencida(s). El AI recomienda reprogramarlas o completarlas urgentemente.`, 'task');
+                }
+
+                const criticalTasks = tasks.filter(t => {
+                    if (!t.completed && t.deadline) {
+                        const timeInfo = getTimeUntilDeadline(t.deadline);
+                        return timeInfo && !timeInfo.overdue && timeInfo.hours < 24;
+                    }
+                    return false;
+                });
+
+                if (criticalTasks.length > 0) {
+                    const titles = criticalTasks.slice(0, 2).map(t => t.title).join(', ');
+                    addNotification(`🔥 ${criticalTasks.length} tarea(s) vencen en menos de 24h: ${titles}`, 'urgent');
+                }
+            };
+
+            const addNotification = (message, type) => {
+                const newNotif = {
+                    id: Date.now(),
+                    message,
+                    type,
+                    timestamp: new Date(),
+                    read: false
+                };
+                setNotifications(prev => [newNotif, ...prev.slice(0, 9)]);
+                
+                // Enviar notificación por WhatsApp si está habilitado
+                if (userProfile.enableWhatsAppNotifications && userProfile.whatsappNumber) {
+                    sendWhatsAppNotification(message, type);
+                }
+            };
+
+            const sendWhatsAppNotification = async (message, type) => {
+                // Verificar si debe enviar según preferencias
+                const shouldSend = 
+                    (type === 'urgent' && userProfile.notificationPreferences.critical) ||
+                    (type === 'task' && userProfile.notificationPreferences.overdue) ||
+                    (type === 'email' && userProfile.notificationPreferences.urgent);
+
+                if (!shouldSend) return;
+
+                try {
+                    // Formatear mensaje para WhatsApp
+                    const whatsappMessage = `🤖 *TaskMaster AI*\n\n${message}\n\n⏰ ${new Date().toLocaleString('es-ES')}`;
+                    
+                    // NOTA: En producción, esto haría una llamada real a la API de Twilio/WhatsApp Business
+                    // Por ahora, simulamos el envío y mostramos en consola
+                    console.log('📱 WhatsApp enviado a:', userProfile.whatsappNumber);
+                    console.log('📨 Mensaje:', whatsappMessage);
+                    
+                    // Simulación de llamada API (descomentar y configurar en producción)
+                    /*
+                    const response = await fetch('TU_BACKEND_URL/send-whatsapp', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            to: userProfile.whatsappNumber,
+                            message: whatsappMessage
+                        })
+                    });
+                    */
+                    
+                    // Feedback visual de envío exitoso
+                    const sentNotif = {
+                        id: Date.now() + 1,
+                        message: `✅ Notificación enviada por WhatsApp a ${userProfile.whatsappNumber}`,
+                        type: 'system',
+                        timestamp: new Date(),
+                        read: false
+                    };
+                    setNotifications(prev => [sentNotif, ...prev.slice(0, 9)]);
+                    
+                } catch (error) {
+                    console.error('Error enviando WhatsApp:', error);
+                    const errorNotif = {
+                        id: Date.now() + 2,
+                        message: '❌ Error al enviar notificación por WhatsApp',
+                        type: 'system',
+                        timestamp: new Date(),
+                        read: false
+                    };
+                    setNotifications(prev => [errorNotif, ...prev.slice(0, 9)]);
+                }
+            };
+
+            const saveUserProfile = () => {
+                // Guardar en localStorage para persistencia
+                localStorage.setItem('taskmaster_profile', JSON.stringify(userProfile));
+                setShowProfileEdit(false);
+                addNotification('✅ Perfil actualizado correctamente', 'system');
+                
+                // Si habilitó WhatsApp, enviar mensaje de confirmación
+                if (userProfile.enableWhatsAppNotifications && userProfile.whatsappNumber) {
+                    sendWhatsAppNotification(
+                        `¡Hola ${userProfile.name}! Las notificaciones de WhatsApp están activas. Recibirás alertas importantes aquí.`,
+                        'urgent'
+                    );
+                }
+            };
+
+            const loadUserProfile = () => {
+                const saved = localStorage.getItem('taskmaster_profile');
+                if (saved) {
+                    setUserProfile(JSON.parse(saved));
+                }
+            };
+
+            const sendDailySummary = () => {
+                if (!userProfile.notificationPreferences.daily) return;
+                
+                const pending = tasks.filter(t => !t.completed).length;
+                const completed = tasks.filter(t => t.completed && 
+                    new Date(t.completedAt).toDateString() === new Date().toDateString()
+                ).length;
+                
+                const message = `📊 *Resumen Diario*\n\n✅ Completadas: ${completed}\n⏳ Pendientes: ${pending}\n💪 ¡Sigue así!`;
+                
+                sendWhatsAppNotification(message, 'urgent');
+            };
+
+            const addTask = () => {
+                if (!newTask.title.trim()) return;
+
+                const aiScore = calculateAIScore(newTask);
+                const priority = determineSmartPriority(newTask, aiScore);
+
+                const task = {
+                    id: Date.now(),
+                    ...newTask,
+                    deadline: newTask.deadline ? new Date(newTask.deadline) : null,
+                    priority,
+                    completed: false,
+                    createdAt: new Date(),
+                    aiScore,
+                    estimatedTime: estimateTaskTime(newTask)
+                };
+
+                setTasks(prev => [task, ...prev]);
+                setNewTask({ title: '', description: '', category: 'trabajo', deadline: '' });
+                
+                addNotification(`Nueva tarea "${task.title}" agregada con prioridad ${priority}`, 'task');
+            };
+
+            const calculateAIScore = (task) => {
+                let score = 50;
+                
+                if (task.title.toLowerCase().includes('urgente') || task.title.toLowerCase().includes('importante')) {
+                    score += 30;
+                }
+                
+                if (task.category === 'emails' || task.category === 'reuniones') {
+                    score += 20;
+                }
+                
+                return Math.min(score, 100);
+            };
+
+            const determineSmartPriority = (task, aiScore) => {
+                if (aiScore >= 80) return 'high';
+                if (aiScore >= 50) return 'medium';
+                return 'low';
+            };
+
+            const estimateTaskTime = (task) => {
+                const categoryTimes = {
+                    emails: 30,
+                    reuniones: 60,
+                    desarrollo: 120,
+                    planificacion: 45,
+                    revision: 30,
+                    trabajo: 60
+                };
+                return categoryTimes[task.category] || 60;
+            };
+
+            const toggleTask = (id) => {
+                setTasks(prev => prev.map(task => 
+                    task.id === id 
+                        ? { ...task, completed: !task.completed, completedAt: !task.completed ? new Date() : null }
+                        : task
+                ));
+            };
+
+            const deleteTask = (id) => {
+                setTasks(prev => prev.filter(task => task.id !== id));
+            };
+
+            const sortTasksByAI = () => {
+                setTasks(prev => [...prev].sort((a, b) => {
+                    // Primero por tareas vencidas
+                    const aTimeInfo = getTimeUntilDeadline(a.deadline);
+                    const bTimeInfo = getTimeUntilDeadline(b.deadline);
+                    
+                    if (aTimeInfo?.overdue && !bTimeInfo?.overdue) return -1;
+                    if (!aTimeInfo?.overdue && bTimeInfo?.overdue) return 1;
+                    
+                    // Luego por urgencia de deadline
+                    if (a.deadline && b.deadline) {
+                        const aHours = aTimeInfo?.hours || Infinity;
+                        const bHours = bTimeInfo?.hours || Infinity;
+                        if (aHours !== bHours) return aHours - bHours;
+                    }
+                    
+                    // Si solo una tiene deadline, esa va primero
+                    if (a.deadline && !b.deadline) return -1;
+                    if (!a.deadline && b.deadline) return 1;
+                    
+                    // Finalmente por AI score
+                    return b.aiScore - a.aiScore;
+                }));
+                addNotification('Tareas reordenadas por AI: prioridad de deadlines + AI score', 'system');
+            };
+
+            const getPriorityColor = (priority) => {
+                const colors = {
+                    high: 'text-red-600 bg-red-50',
+                    medium: 'text-amber-600 bg-amber-50',
+                    low: 'text-green-600 bg-green-50'
+                };
+                return colors[priority] || colors.low;
+            };
+
+            const getPriorityLabel = (priority) => {
+                const labels = {
+                    high: 'Alta',
+                    medium: 'Media',
+                    low: 'Baja'
+                };
+                return labels[priority] || 'Baja';
+            };
+
+            return (
+                <div className="min-h-screen p-4 md:p-8">
+                    <div className="max-w-7xl mx-auto">
+                        {/* Header */}
+                        <div className="glass-effect rounded-2xl shadow-2xl p-6 mb-6">
+                            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+                                <div>
+                                    <h1 className="text-3xl font-bold text-gray-800 mb-2">
+                                        🤖 TaskMaster AI
+                                    </h1>
+                                    <p className="text-gray-600">Tu asistente inteligente de productividad</p>
+                                </div>
+                                <div className="flex gap-2">
+                                    <button 
+                                        onClick={sortTasksByAI}
+                                        className="px-4 py-2 bg-gradient-to-r from-purple-600 to-blue-600 text-white rounded-lg hover:shadow-lg transition-all"
+                                    >
+                                        ✨ Ordenar por AI
+                                    </button>
+                                    <div className="relative">
+                                        <button className="px-4 py-2 bg-white border-2 border-gray-200 rounded-lg hover:shadow-lg transition-all">
+                                            🔔 {notifications.filter(n => !n.read).length}
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Stats Cards */}
+                        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+                            <div className="stats-card rounded-xl p-6 shadow-lg">
+                                <div className="text-sm opacity-90 mb-1">Completadas Hoy</div>
+                                <div className="text-3xl font-bold">{stats.completedToday}</div>
+                            </div>
+                            <div className="glass-effect rounded-xl p-6 shadow-lg">
+                                <div className="text-sm text-gray-600 mb-1">Tareas Pendientes</div>
+                                <div className="text-3xl font-bold text-gray-800">{stats.pendingTasks}</div>
+                            </div>
+                            <div className="glass-effect rounded-xl p-6 shadow-lg">
+                                <div className="text-sm text-gray-600 mb-1">Productividad</div>
+                                <div className="text-3xl font-bold text-green-600">{stats.productivity}%</div>
+                            </div>
+                            <div className="glass-effect rounded-xl p-6 shadow-lg">
+                                <div className="text-sm text-gray-600 mb-1">Racha de Días</div>
+                                <div className="text-3xl font-bold text-orange-600">{stats.streak} 🔥</div>
+                            </div>
+                        </div>
+
+                        {/* Navigation Tabs */}
+                        <div className="glass-effect rounded-2xl shadow-xl p-2 mb-6">
+                            <div className="flex gap-2">
+                                {['dashboard', 'tareas', 'emails', 'ai-asistente', 'perfil'].map(tab => (
+                                    <button
+                                        key={tab}
+                                        onClick={() => setActiveTab(tab)}
+                                        className={`flex-1 py-3 px-4 rounded-xl font-medium transition-all ${
+                                            activeTab === tab
+                                                ? 'bg-gradient-to-r from-purple-600 to-blue-600 text-white shadow-lg'
+                                                : 'text-gray-600 hover:bg-gray-100'
+                                        }`}
+                                    >
+                                        {tab === 'dashboard' && '📊 Dashboard'}
+                                        {tab === 'tareas' && '✓ Tareas'}
+                                        {tab === 'emails' && '📧 Emails'}
+                                        {tab === 'ai-asistente' && '🤖 AI Asistente'}
+                                        {tab === 'perfil' && '👤 Perfil'}
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+
+                        {/* Main Content Area */}
+                        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                            {/* Left Column - Main Content */}
+                            <div className="lg:col-span-2">
+                                {activeTab === 'dashboard' && (
+                                    <div className="glass-effect rounded-2xl shadow-xl p-6">
+                                        <h2 className="text-2xl font-bold text-gray-800 mb-6">📊 Panel de Control</h2>
+                                        
+                                        <div className="space-y-4">
+                                            <div className="bg-gradient-to-r from-blue-50 to-purple-50 p-6 rounded-xl">
+                                                <h3 className="text-lg font-semibold text-gray-800 mb-3">Resumen del Día</h3>
+                                                <div className="space-y-2">
+                                                    <p className="text-gray-700">• {stats.completedToday} tareas completadas</p>
+                                                    <p className="text-gray-700">• {stats.pendingTasks} tareas pendientes</p>
+                                                    <p className="text-gray-700">• {emails.filter(e => e.unread).length} emails sin leer</p>
+                                                    <p className="text-gray-700">• Productividad: {stats.productivity}%</p>
+                                                </div>
+                                            </div>
+
+                                            {/* Deadline Statistics */}
+                                            <div className="bg-white p-6 rounded-xl border-2 border-gray-100">
+                                                <h3 className="text-lg font-semibold text-gray-800 mb-3">⏰ Estado de Deadlines</h3>
+                                                <div className="space-y-3">
+                                                    {(() => {
+                                                        const pending = tasks.filter(t => !t.completed);
+                                                        const overdue = pending.filter(t => {
+                                                            const timeInfo = getTimeUntilDeadline(t.deadline);
+                                                            return timeInfo?.overdue;
+                                                        }).length;
+                                                        const critical = pending.filter(t => {
+                                                            const timeInfo = getTimeUntilDeadline(t.deadline);
+                                                            return timeInfo && !timeInfo.overdue && timeInfo.hours < 24;
+                                                        }).length;
+                                                        const urgent = pending.filter(t => {
+                                                            const timeInfo = getTimeUntilDeadline(t.deadline);
+                                                            return timeInfo && !timeInfo.overdue && timeInfo.days <= 3 && timeInfo.hours >= 24;
+                                                        }).length;
+                                                        const normal = pending.filter(t => {
+                                                            const timeInfo = getTimeUntilDeadline(t.deadline);
+                                                            return timeInfo && !timeInfo.overdue && timeInfo.days > 3;
+                                                        }).length;
+                                                        
+                                                        return (
+                                                            <>
+                                                                {overdue > 0 && (
+                                                                    <div className="flex items-center justify-between p-3 bg-red-50 rounded-lg border-2 border-red-200">
+                                                                        <div className="flex items-center gap-2">
+                                                                            <span className="text-xl">⚠️</span>
+                                                                            <span className="font-medium text-red-700">Vencidas</span>
+                                                                        </div>
+                                                                        <span className="text-xl font-bold text-red-700">{overdue}</span>
+                                                                    </div>
+                                                                )}
+                                                                {critical > 0 && (
+                                                                    <div className="flex items-center justify-between p-3 bg-red-50 rounded-lg">
+                                                                        <div className="flex items-center gap-2">
+                                                                            <span className="text-xl">🔥</span>
+                                                                            <span className="font-medium text-red-600">Críticas (&lt;24h)</span>
+                                                                        </div>
+                                                                        <span className="text-xl font-bold text-red-600">{critical}</span>
+                                                                    </div>
+                                                                )}
+                                                                {urgent > 0 && (
+                                                                    <div className="flex items-center justify-between p-3 bg-orange-50 rounded-lg">
+                                                                        <div className="flex items-center gap-2">
+                                                                            <span className="text-xl">⏰</span>
+                                                                            <span className="font-medium text-orange-600">Urgentes (1-3d)</span>
+                                                                        </div>
+                                                                        <span className="text-xl font-bold text-orange-600">{urgent}</span>
+                                                                    </div>
+                                                                )}
+                                                                {normal > 0 && (
+                                                                    <div className="flex items-center justify-between p-3 bg-green-50 rounded-lg">
+                                                                        <div className="flex items-center gap-2">
+                                                                            <span className="text-xl">✅</span>
+                                                                            <span className="font-medium text-green-600">Normal (&gt;3d)</span>
+                                                                        </div>
+                                                                        <span className="text-xl font-bold text-green-600">{normal}</span>
+                                                                    </div>
+                                                                )}
+                                                                {overdue === 0 && critical === 0 && urgent === 0 && normal === 0 && (
+                                                                    <div className="text-center py-4 text-gray-500">
+                                                                        No hay tareas con deadline
+                                                                    </div>
+                                                                )}
+                                                            </>
+                                                        );
+                                                    })()}
+                                                </div>
+                                            </div>
+
+                                            <div className="bg-white p-6 rounded-xl border-2 border-gray-100">
+                                                <h3 className="text-lg font-semibold text-gray-800 mb-3">🎯 Próximas Tareas Prioritarias</h3>
+                                                <div className="space-y-3">
+                                                    {tasks.filter(t => !t.completed).slice(0, 3).map(task => {
+                                                        const urgency = getDeadlineUrgency(task.deadline);
+                                                        const timeInfo = getTimeUntilDeadline(task.deadline);
+                                                        
+                                                        return (
+                                                            <div key={task.id} className={`flex items-center justify-between p-4 rounded-lg ${urgency.bgColor}`}>
+                                                                <div className="flex-1">
+                                                                    <div className="font-medium text-gray-800 mb-1">{task.title}</div>
+                                                                    <div className="flex items-center gap-2 text-sm">
+                                                                        <span className="text-gray-600">⏱️ {task.estimatedTime} min</span>
+                                                                        {task.deadline && (
+                                                                            <span className={`font-semibold ${urgency.textColor}`}>
+                                                                                {timeInfo?.overdue ? '⚠️ VENCIDA' : `⏰ ${timeInfo?.text}`}
+                                                                            </span>
+                                                                        )}
+                                                                    </div>
+                                                                </div>
+                                                                <span className={`px-3 py-1 rounded-full text-xs font-medium ${getPriorityColor(task.priority)}`}>
+                                                                    {getPriorityLabel(task.priority)}
+                                                                </span>
+                                                            </div>
+                                                        );
+                                                    })}
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                )}
+
+                                {activeTab === 'tareas' && (
+                                    <div className="glass-effect rounded-2xl shadow-xl p-6">
+                                        <h2 className="text-2xl font-bold text-gray-800 mb-6">✓ Gestión de Tareas</h2>
+                                        
+                                        {/* Add Task Form */}
+                                        <div className="bg-gradient-to-r from-blue-50 to-purple-50 p-6 rounded-xl mb-6">
+                                            <h3 className="text-lg font-semibold text-gray-800 mb-4">➕ Nueva Tarea</h3>
+                                            <div className="space-y-3">
+                                                <input
+                                                    type="text"
+                                                    placeholder="Título de la tarea..."
+                                                    value={newTask.title}
+                                                    onChange={(e) => setNewTask({...newTask, title: e.target.value})}
+                                                    className="w-full px-4 py-3 rounded-lg border-2 border-gray-200 focus:border-purple-500 focus:outline-none"
+                                                />
+                                                <textarea
+                                                    placeholder="Descripción..."
+                                                    value={newTask.description}
+                                                    onChange={(e) => setNewTask({...newTask, description: e.target.value})}
+                                                    className="w-full px-4 py-3 rounded-lg border-2 border-gray-200 focus:border-purple-500 focus:outline-none"
+                                                    rows="2"
+                                                />
+                                                <div className="grid grid-cols-2 gap-3">
+                                                    <select
+                                                        value={newTask.category}
+                                                        onChange={(e) => setNewTask({...newTask, category: e.target.value})}
+                                                        className="px-4 py-3 rounded-lg border-2 border-gray-200 focus:border-purple-500 focus:outline-none"
+                                                    >
+                                                        <option value="trabajo">💼 Trabajo</option>
+                                                        <option value="emails">📧 Emails</option>
+                                                        <option value="reuniones">👥 Reuniones</option>
+                                                        <option value="desarrollo">💻 Desarrollo</option>
+                                                        <option value="planificacion">📋 Planificación</option>
+                                                        <option value="revision">🔍 Revisión</option>
+                                                    </select>
+                                                    <input
+                                                        type="datetime-local"
+                                                        value={newTask.deadline}
+                                                        onChange={(e) => setNewTask({...newTask, deadline: e.target.value})}
+                                                        className="px-4 py-3 rounded-lg border-2 border-gray-200 focus:border-purple-500 focus:outline-none"
+                                                        placeholder="Fecha límite"
+                                                    />
+                                                </div>
+                                                <button
+                                                    onClick={addTask}
+                                                    className="w-full px-6 py-3 bg-gradient-to-r from-purple-600 to-blue-600 text-white rounded-lg font-medium hover:shadow-lg transition-all"
+                                                >
+                                                    Agregar Tarea
+                                                </button>
+                                            </div>
+                                        </div>
+
+                                        {/* Task List */}
+                                        <div className="space-y-3">
+                                            {tasks.map(task => {
+                                                const urgency = getDeadlineUrgency(task.deadline);
+                                                const timeInfo = getTimeUntilDeadline(task.deadline);
+                                                const animationClass = timeInfo?.overdue ? 'deadline-overdue' : urgency.level === 'critical' ? 'deadline-critical' : '';
+                                                
+                                                return (
+                                                    <div
+                                                        key={task.id}
+                                                        className={`task-card ${task.completed ? 'opacity-60' : ''} ${urgency.bgColor} ${animationClass} bg-white p-5 rounded-xl shadow-md`}
+                                                    >
+                                                        <div className="flex items-start gap-4">
+                                                            <input
+                                                                type="checkbox"
+                                                                checked={task.completed}
+                                                                onChange={() => toggleTask(task.id)}
+                                                                className="mt-1 w-5 h-5 rounded cursor-pointer"
+                                                            />
+                                                            <div className="flex-1">
+                                                                <div className="flex items-start justify-between mb-2">
+                                                                    <h3 className={`text-lg font-semibold ${task.completed ? 'line-through text-gray-400' : 'text-gray-800'}`}>
+                                                                        {task.title}
+                                                                    </h3>
+                                                                    <div className="flex gap-2">
+                                                                        <span className={`px-3 py-1 rounded-full text-xs font-medium ${getPriorityColor(task.priority)}`}>
+                                                                            {getPriorityLabel(task.priority)}
+                                                                        </span>
+                                                                        <button
+                                                                            onClick={() => deleteTask(task.id)}
+                                                                            className="text-red-500 hover:text-red-700 px-2"
+                                                                        >
+                                                                            🗑️
+                                                                        </button>
+                                                                    </div>
+                                                                </div>
+                                                                
+                                                                {/* Deadline Badge - DESTACADO */}
+                                                                {task.deadline && (
+                                                                    <div className={`inline-flex items-center gap-2 ${urgency.badgeColor} px-4 py-2 rounded-lg mb-3 font-semibold text-sm shadow-md`}>
+                                                                        <span className="text-xl">
+                                                                            {timeInfo?.overdue ? '⚠️' : urgency.level === 'critical' ? '🔥' : urgency.level === 'urgent' ? '⏰' : urgency.level === 'upcoming' ? '📅' : '✅'}
+                                                                        </span>
+                                                                        <span>
+                                                                            {timeInfo?.overdue ? 'VENCIDA' : `Vence en: ${timeInfo?.text}`}
+                                                                        </span>
+                                                                    </div>
+                                                                )}
+                                                                
+                                                                <p className="text-gray-600 text-sm mb-2">{task.description}</p>
+                                                                <div className="flex flex-wrap gap-3 text-sm text-gray-500">
+                                                                    <span>⏱️ {task.estimatedTime} min</span>
+                                                                    <span>🏷️ {task.category}</span>
+                                                                    <span>🤖 AI Score: {task.aiScore}/100</span>
+                                                                    {task.deadline && (
+                                                                        <span className={`font-medium ${urgency.textColor}`}>
+                                                                            📆 {new Date(task.deadline).toLocaleDateString('es-ES', { 
+                                                                                day: '2-digit', 
+                                                                                month: 'short', 
+                                                                                hour: '2-digit', 
+                                                                                minute: '2-digit' 
+                                                                            })}
+                                                                        </span>
+                                                                    )}
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+                                    </div>
+                                )}
+
+                                {activeTab === 'emails' && (
+                                    <div className="glass-effect rounded-2xl shadow-xl p-6">
+                                        <h2 className="text-2xl font-bold text-gray-800 mb-6">📧 Gestión de Emails</h2>
+                                        
+                                        <div className="space-y-3">
+                                            {emails.map(email => (
+                                                <div
+                                                    key={email.id}
+                                                    className={`bg-white p-5 rounded-xl shadow-md border-l-4 ${
+                                                        email.priority === 'high' ? 'border-red-500' : 'border-amber-500'
+                                                    }`}
+                                                >
+                                                    <div className="flex items-start justify-between mb-2">
+                                                        <div className="flex-1">
+                                                            <div className="flex items-center gap-2 mb-1">
+                                                                {email.unread && <span className="w-2 h-2 bg-blue-600 rounded-full"></span>}
+                                                                <h3 className="font-semibold text-gray-800">{email.subject}</h3>
+                                                            </div>
+                                                            <p className="text-sm text-gray-600">{email.from}</p>
+                                                        </div>
+                                                        <span className={`px-3 py-1 rounded-full text-xs font-medium ${getPriorityColor(email.priority)}`}>
+                                                            {getPriorityLabel(email.priority)}
+                                                        </span>
+                                                    </div>
+                                                    <div className="text-xs text-gray-500">
+                                                        {email.timestamp.toLocaleString()}
+                                                    </div>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                )}
+
+                                {activeTab === 'ai-asistente' && (
+                                    <div className="glass-effect rounded-2xl shadow-xl p-6">
+                                        <h2 className="text-2xl font-bold text-gray-800 mb-6">🤖 Asistente AI</h2>
+                                        
+                                        <div className="space-y-4">
+                                            <div className="bg-gradient-to-r from-purple-50 to-blue-50 p-6 rounded-xl">
+                                                <h3 className="text-lg font-semibold text-gray-800 mb-3">🧠 Motor de Aprendizaje</h3>
+                                                <p className="text-gray-700 mb-3">
+                                                    El AI está analizando tus patrones de trabajo para optimizar tu productividad.
+                                                </p>
+                                                <div className="bg-white p-4 rounded-lg space-y-2">
+                                                    <div className="flex justify-between items-center">
+                                                        <span className="text-sm text-gray-600">Patrones detectados</span>
+                                                        <span className="font-semibold text-purple-600">15</span>
+                                                    </div>
+                                                    <div className="flex justify-between items-center">
+                                                        <span className="text-sm text-gray-600">Precisión del modelo</span>
+                                                        <span className="font-semibold text-green-600">87%</span>
+                                                    </div>
+                                                    <div className="flex justify-between items-center">
+                                                        <span className="text-sm text-gray-600">Datos de entrenamiento</span>
+                                                        <span className="font-semibold text-blue-600">{tasks.length} tareas</span>
+                                                    </div>
+                                                </div>
+                                            </div>
+
+                                            <div className="bg-white p-6 rounded-xl border-2 border-purple-100">
+                                                <h3 className="text-lg font-semibold text-gray-800 mb-4">💡 Recomendaciones del AI</h3>
+                                                <div className="space-y-3">
+                                                    {aiSuggestions.map(suggestion => (
+                                                        <div key={suggestion.id} className="ai-suggestion bg-gradient-to-r from-purple-50 to-blue-50 p-4 rounded-lg">
+                                                            <div className="flex items-start gap-3">
+                                                                <span className="text-2xl">
+                                                                    {suggestion.type === 'priority' && '🎯'}
+                                                                    {suggestion.type === 'optimization' && '⚡'}
+                                                                    {suggestion.type === 'reminder' && '🔔'}
+                                                                    {suggestion.type === 'warning' && '⚠️'}
+                                                                </span>
+                                                                <div className="flex-1">
+                                                                    <p className="text-gray-800 font-medium mb-1">{suggestion.message}</p>
+                                                                    <div className="flex items-center gap-2">
+                                                                        <div className="bg-white px-2 py-1 rounded text-xs">
+                                                                            Confianza: {suggestion.confidence}%
+                                                                        </div>
+                                                                    </div>
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                )}
+
+                                {activeTab === 'perfil' && (
+                                    <div className="glass-effect rounded-2xl shadow-xl p-6">
+                                        <h2 className="text-2xl font-bold text-gray-800 mb-6">👤 Mi Perfil</h2>
+                                        
+                                        {/* Información Personal */}
+                                        <div className="bg-gradient-to-r from-blue-50 to-purple-50 p-6 rounded-xl mb-6">
+                                            <h3 className="text-lg font-semibold text-gray-800 mb-4">📝 Información Personal</h3>
+                                            <div className="space-y-4">
+                                                <div>
+                                                    <label className="block text-sm font-medium text-gray-700 mb-2">Nombre Completo</label>
+                                                    <input
+                                                        type="text"
+                                                        value={userProfile.name}
+                                                        onChange={(e) => setUserProfile({...userProfile, name: e.target.value})}
+                                                        placeholder="Ej: Juan Pérez"
+                                                        className="w-full px-4 py-3 rounded-lg border-2 border-gray-200 focus:border-purple-500 focus:outline-none"
+                                                    />
+                                                </div>
+                                                <div>
+                                                    <label className="block text-sm font-medium text-gray-700 mb-2">Email</label>
+                                                    <input
+                                                        type="email"
+                                                        value={userProfile.email}
+                                                        onChange={(e) => setUserProfile({...userProfile, email: e.target.value})}
+                                                        placeholder="tu@email.com"
+                                                        className="w-full px-4 py-3 rounded-lg border-2 border-gray-200 focus:border-purple-500 focus:outline-none"
+                                                    />
+                                                </div>
+                                                <div>
+                                                    <label className="block text-sm font-medium text-gray-700 mb-2">Teléfono</label>
+                                                    <input
+                                                        type="tel"
+                                                        value={userProfile.phone}
+                                                        onChange={(e) => setUserProfile({...userProfile, phone: e.target.value})}
+                                                        placeholder="Ej: +34 600 123 456"
+                                                        className="w-full px-4 py-3 rounded-lg border-2 border-gray-200 focus:border-purple-500 focus:outline-none"
+                                                    />
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        {/* Configuración de WhatsApp */}
+                                        <div className="bg-white p-6 rounded-xl border-2 border-green-200 mb-6">
+                                            <div className="flex items-center gap-3 mb-4">
+                                                <span className="text-3xl">📱</span>
+                                                <h3 className="text-lg font-semibold text-gray-800">Notificaciones por WhatsApp</h3>
+                                            </div>
+                                            
+                                            <div className="bg-green-50 p-4 rounded-lg mb-4">
+                                                <p className="text-sm text-gray-700 mb-2">
+                                                    🔔 <strong>Recibe alertas importantes directamente en WhatsApp</strong>
+                                                </p>
+                                                <ul className="text-sm text-gray-600 space-y-1 ml-4">
+                                                    <li>• Tareas vencidas</li>
+                                                    <li>• Deadlines críticos (menos de 24h)</li>
+                                                    <li>• Resumen diario de productividad</li>
+                                                    <li>• Emails urgentes acumulados</li>
+                                                </ul>
+                                            </div>
+
+                                            <div className="space-y-4">
+                                                <div>
+                                                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                                                        Número de WhatsApp (con código de país)
+                                                    </label>
+                                                    <input
+                                                        type="tel"
+                                                        value={userProfile.whatsappNumber}
+                                                        onChange={(e) => setUserProfile({...userProfile, whatsappNumber: e.target.value})}
+                                                        placeholder="Ej: +34612345678"
+                                                        className="w-full px-4 py-3 rounded-lg border-2 border-gray-200 focus:border-green-500 focus:outline-none"
+                                                    />
+                                                    <p className="text-xs text-gray-500 mt-1">
+                                                        Formato: +34612345678 (sin espacios ni guiones)
+                                                    </p>
+                                                </div>
+
+                                                <div className="flex items-center gap-3 p-4 bg-gray-50 rounded-lg">
+                                                    <input
+                                                        type="checkbox"
+                                                        checked={userProfile.enableWhatsAppNotifications}
+                                                        onChange={(e) => setUserProfile({...userProfile, enableWhatsAppNotifications: e.target.checked})}
+                                                        className="w-5 h-5 rounded cursor-pointer"
+                                                    />
+                                                    <label className="font-medium text-gray-800">
+                                                        Activar notificaciones por WhatsApp
+                                                    </label>
+                                                </div>
+
+                                                {userProfile.enableWhatsAppNotifications && (
+                                                    <div className="bg-purple-50 p-4 rounded-lg space-y-3">
+                                                        <p className="font-medium text-gray-800 mb-2">¿Qué notificaciones quieres recibir?</p>
+                                                        
+                                                        <div className="flex items-center gap-3">
+                                                            <input
+                                                                type="checkbox"
+                                                                checked={userProfile.notificationPreferences.overdue}
+                                                                onChange={(e) => setUserProfile({
+                                                                    ...userProfile,
+                                                                    notificationPreferences: {
+                                                                        ...userProfile.notificationPreferences,
+                                                                        overdue: e.target.checked
+                                                                    }
+                                                                })}
+                                                                className="w-4 h-4 rounded cursor-pointer"
+                                                            />
+                                                            <label className="text-sm text-gray-700">⚠️ Tareas vencidas</label>
+                                                        </div>
+
+                                                        <div className="flex items-center gap-3">
+                                                            <input
+                                                                type="checkbox"
+                                                                checked={userProfile.notificationPreferences.critical}
+                                                                onChange={(e) => setUserProfile({
+                                                                    ...userProfile,
+                                                                    notificationPreferences: {
+                                                                        ...userProfile.notificationPreferences,
+                                                                        critical: e.target.checked
+                                                                    }
+                                                                })}
+                                                                className="w-4 h-4 rounded cursor-pointer"
+                                                            />
+                                                            <label className="text-sm text-gray-700">🔥 Deadlines críticos (&lt;24h)</label>
+                                                        </div>
+
+                                                        <div className="flex items-center gap-3">
+                                                            <input
+                                                                type="checkbox"
+                                                                checked={userProfile.notificationPreferences.urgent}
+                                                                onChange={(e) => setUserProfile({
+                                                                    ...userProfile,
+                                                                    notificationPreferences: {
+                                                                        ...userProfile.notificationPreferences,
+                                                                        urgent: e.target.checked
+                                                                    }
+                                                                })}
+                                                                className="w-4 h-4 rounded cursor-pointer"
+                                                            />
+                                                            <label className="text-sm text-gray-700">📧 Emails urgentes acumulados</label>
+                                                        </div>
+
+                                                        <div className="flex items-center gap-3">
+                                                            <input
+                                                                type="checkbox"
+                                                                checked={userProfile.notificationPreferences.daily}
+                                                                onChange={(e) => setUserProfile({
+                                                                    ...userProfile,
+                                                                    notificationPreferences: {
+                                                                        ...userProfile.notificationPreferences,
+                                                                        daily: e.target.checked
+                                                                    }
+                                                                })}
+                                                                className="w-4 h-4 rounded cursor-pointer"
+                                                            />
+                                                            <label className="text-sm text-gray-700">📊 Resumen diario (8:00 AM)</label>
+                                                        </div>
+                                                    </div>
+                                                )}
+                                            </div>
+
+                                            {/* Botón de prueba */}
+                                            {userProfile.enableWhatsAppNotifications && userProfile.whatsappNumber && (
+                                                <button
+                                                    onClick={() => sendWhatsAppNotification('🧪 Este es un mensaje de prueba. Si lo recibes, ¡todo funciona correctamente!', 'urgent')}
+                                                    className="w-full mt-4 px-4 py-3 bg-green-500 text-white rounded-lg font-medium hover:bg-green-600 transition-all"
+                                                >
+                                                    📱 Enviar mensaje de prueba
+                                                </button>
+                                            )}
+                                        </div>
+
+                                        {/* Información técnica */}
+                                        <div className="bg-yellow-50 p-4 rounded-lg border-2 border-yellow-200 mb-6">
+                                            <div className="flex items-start gap-3">
+                                                <span className="text-2xl">ℹ️</span>
+                                                <div>
+                                                    <p className="font-medium text-gray-800 mb-2">Configuración Requerida</p>
+                                                    <p className="text-sm text-gray-700">
+                                                        Para usar notificaciones de WhatsApp en producción, necesitarás:
+                                                    </p>
+                                                    <ul className="text-sm text-gray-600 mt-2 space-y-1">
+                                                        <li>• Cuenta de <strong>Twilio</strong> o <strong>WhatsApp Business API</strong></li>
+                                                        <li>• Backend configurado para enviar mensajes</li>
+                                                        <li>• Número verificado en WhatsApp Business</li>
+                                                    </ul>
+                                                    <p className="text-xs text-gray-500 mt-2">
+                                                        Actualmente en modo demostración. Los mensajes se registran en consola.
+                                                    </p>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        {/* Botón guardar */}
+                                        <button
+                                            onClick={saveUserProfile}
+                                            className="w-full px-6 py-4 bg-gradient-to-r from-purple-600 to-blue-600 text-white rounded-xl font-semibold hover:shadow-lg transition-all text-lg"
+                                        >
+                                            💾 Guardar Configuración
+                                        </button>
+                                    </div>
+                                )}
+                            </div>
+
+                            {/* Right Column - Sidebar */}
+                            <div className="space-y-6">
+                                {/* AI Insights */}
+                                <div className="glass-effect rounded-2xl shadow-xl p-6">
+                                    <h3 className="text-lg font-bold text-gray-800 mb-4">🎯 Insights del AI</h3>
+                                    <div className="space-y-3">
+                                        <div className="bg-gradient-to-r from-green-50 to-emerald-50 p-4 rounded-lg">
+                                            <div className="text-sm text-gray-600 mb-1">Mejor momento del día</div>
+                                            <div className="text-lg font-bold text-gray-800">09:00 - 12:00</div>
+                                        </div>
+                                        <div className="bg-gradient-to-r from-blue-50 to-cyan-50 p-4 rounded-lg">
+                                            <div className="text-sm text-gray-600 mb-1">Categoría más productiva</div>
+                                            <div className="text-lg font-bold text-gray-800">Desarrollo</div>
+                                        </div>
+                                        <div className="bg-gradient-to-r from-purple-50 to-pink-50 p-4 rounded-lg">
+                                            <div className="text-sm text-gray-600 mb-1">Tiempo promedio/tarea</div>
+                                            <div className="text-lg font-bold text-gray-800">
+                                                {calculateAvgCompletionTime(tasks.filter(t => t.completed))} min
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* Color Legend */}
+                                <div className="glass-effect rounded-2xl shadow-xl p-6">
+                                    <h3 className="text-lg font-bold text-gray-800 mb-4">🎨 Código de Colores</h3>
+                                    <div className="space-y-3">
+                                        <div className="flex items-center gap-3 p-3 bg-red-50 border-l-4 border-red-500 rounded">
+                                            <span className="text-2xl">🔥</span>
+                                            <div>
+                                                <div className="font-semibold text-red-700">Crítico</div>
+                                                <div className="text-xs text-red-600">Menos de 24 horas</div>
+                                            </div>
+                                        </div>
+                                        <div className="flex items-center gap-3 p-3 bg-orange-50 border-l-4 border-orange-500 rounded">
+                                            <span className="text-2xl">⏰</span>
+                                            <div>
+                                                <div className="font-semibold text-orange-700">Urgente</div>
+                                                <div className="text-xs text-orange-600">1-3 días</div>
+                                            </div>
+                                        </div>
+                                        <div className="flex items-center gap-3 p-3 bg-yellow-50 border-l-4 border-yellow-500 rounded">
+                                            <span className="text-2xl">📅</span>
+                                            <div>
+                                                <div className="font-semibold text-yellow-700">Próximo</div>
+                                                <div className="text-xs text-yellow-700">3-7 días</div>
+                                            </div>
+                                        </div>
+                                        <div className="flex items-center gap-3 p-3 bg-green-50 border-l-4 border-green-500 rounded">
+                                            <span className="text-2xl">✅</span>
+                                            <div>
+                                                <div className="font-semibold text-green-700">Normal</div>
+                                                <div className="text-xs text-green-600">Más de 7 días</div>
+                                            </div>
+                                        </div>
+                                        <div className="flex items-center gap-3 p-3 bg-red-100 border-2 border-red-300 rounded">
+                                            <span className="text-2xl">⚠️</span>
+                                            <div>
+                                                <div className="font-semibold text-red-700">VENCIDA</div>
+                                                <div className="text-xs text-red-600">Fecha pasada</div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* Quick Actions */}
+                                <div className="glass-effect rounded-2xl shadow-xl p-6">
+                                    <h3 className="text-lg font-bold text-gray-800 mb-4">⚡ Acciones Rápidas</h3>
+                                    <div className="space-y-2">
+                                        <button 
+                                            onClick={() => setActiveTab('tareas')}
+                                            className="w-full px-4 py-3 bg-white border-2 border-gray-200 rounded-lg hover:border-purple-500 hover:shadow-md transition-all text-left"
+                                        >
+                                            ➕ Nueva tarea
+                                        </button>
+                                        <button 
+                                            onClick={sortTasksByAI}
+                                            className="w-full px-4 py-3 bg-white border-2 border-gray-200 rounded-lg hover:border-purple-500 hover:shadow-md transition-all text-left"
+                                        >
+                                            🔄 Reorganizar tareas
+                                        </button>
+                                        <button 
+                                            onClick={() => setActiveTab('emails')}
+                                            className="w-full px-4 py-3 bg-white border-2 border-gray-200 rounded-lg hover:border-purple-500 hover:shadow-md transition-all text-left"
+                                        >
+                                            📧 Ver emails
+                                        </button>
+                                        <button 
+                                            onClick={analyzePatternsAndSuggest}
+                                            className="w-full px-4 py-3 bg-gradient-to-r from-purple-600 to-blue-600 text-white rounded-lg hover:shadow-lg transition-all text-left"
+                                        >
+                                            🤖 Analizar con AI
+                                        </button>
+                                    </div>
+                                </div>
+
+                                {/* Notifications */}
+                                <div className="glass-effect rounded-2xl shadow-xl p-6">
+                                    <h3 className="text-lg font-bold text-gray-800 mb-4">🔔 Notificaciones</h3>
+                                    <div className="space-y-2 max-h-96 overflow-y-auto">
+                                        {notifications.slice(0, 5).map(notif => (
+                                            <div key={notif.id} className="bg-white p-3 rounded-lg border border-gray-100">
+                                                <p className="text-sm text-gray-800">{notif.message}</p>
+                                                <p className="text-xs text-gray-500 mt-1">
+                                                    {new Date(notif.timestamp).toLocaleTimeString()}
+                                                </p>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            );
+        }
+
+        ReactDOM.render(<TaskMasterAI />, document.getElementById('root'));
+    </script>
+    
+    <!-- Service Worker Registration -->
+    <script>
+        // Registrar Service Worker para PWA
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('/service-worker.js')
+                    .then((registration) => {
+                        console.log('✅ Service Worker registrado:', registration.scope);
+                        
+                        // Verificar actualizaciones
+                        registration.addEventListener('updatefound', () => {
+                            const newWorker = registration.installing;
+                            newWorker.addEventListener('statechange', () => {
+                                if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+                                    console.log('🔄 Nueva versión disponible');
+                                    if (confirm('Nueva versión disponible. ¿Actualizar ahora?')) {
+                                        window.location.reload();
+                                    }
+                                }
+                            });
+                        });
+                    })
+                    .catch((error) => {
+                        console.log('❌ Error registrando Service Worker:', error);
+                    });
+            });
+        }
+
+        // Botón de instalación PWA
+        let deferredPrompt;
+        
+        window.addEventListener('beforeinstallprompt', (e) => {
+            console.log('📱 Instalación PWA disponible');
+            e.preventDefault();
+            deferredPrompt = e;
+            
+            // Mostrar botón de instalación personalizado
+            const installButton = document.createElement('button');
+            installButton.textContent = '📱 Instalar App';
+            installButton.style.cssText = `
+                position: fixed;
+                bottom: 20px;
+                right: 20px;
+                z-index: 9999;
+                padding: 15px 25px;
+                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                color: white;
+                border: none;
+                border-radius: 50px;
+                font-weight: 600;
+                font-size: 16px;
+                box-shadow: 0 10px 25px rgba(102, 126, 234, 0.4);
+                cursor: pointer;
+                font-family: 'Inter', sans-serif;
+                transition: all 0.3s ease;
+            `;
+            
+            installButton.addEventListener('mouseenter', () => {
+                installButton.style.transform = 'translateY(-3px)';
+                installButton.style.boxShadow = '0 15px 30px rgba(102, 126, 234, 0.5)';
+            });
+            
+            installButton.addEventListener('mouseleave', () => {
+                installButton.style.transform = 'translateY(0)';
+                installButton.style.boxShadow = '0 10px 25px rgba(102, 126, 234, 0.4)';
+            });
+            
+            installButton.addEventListener('click', async () => {
+                if (deferredPrompt) {
+                    deferredPrompt.prompt();
+                    const { outcome } = await deferredPrompt.userChoice;
+                    console.log('Resultado instalación:', outcome);
+                    
+                    if (outcome === 'accepted') {
+                        console.log('✅ App instalada correctamente');
+                        installButton.remove();
+                    }
+                    
+                    deferredPrompt = null;
+                }
+            });
+            
+            document.body.appendChild(installButton);
+        });
+
+        // Detectar cuando se instala la app
+        window.addEventListener('appinstalled', () => {
+            console.log('✅ TaskMaster AI instalada en el dispositivo');
+            deferredPrompt = null;
+            
+            // Mostrar notificación de bienvenida
+            if ('Notification' in window && Notification.permission === 'granted') {
+                new Notification('¡Bienvenido a TaskMaster AI!', {
+                    body: 'La app se ha instalado correctamente en tu dispositivo',
+                    icon: 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 96 96"%3E%3Ctext x="48" y="70" font-size="60" text-anchor="middle"%3E🤖%3C/text%3E%3C/svg%3E',
+                    badge: 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 96 96"%3E%3Ctext x="48" y="70" font-size="60" text-anchor="middle"%3E✓%3C/text%3E%3C/svg%3E'
+                });
+            }
+        });
+
+        // Solicitar permisos de notificación al cargar
+        if ('Notification' in window && Notification.permission === 'default') {
+            Notification.requestPermission().then((permission) => {
+                console.log('Permiso notificaciones:', permission);
+            });
+        }
+
+        // Detectar si se ejecuta como PWA instalada
+        const isStandalone = window.matchMedia('(display-mode: standalone)').matches 
+                          || window.navigator.standalone 
+                          || document.referrer.includes('android-app://');
+        
+        if (isStandalone) {
+            console.log('✅ Ejecutando como PWA instalada');
+        }
+
+        // Prevenir zoom accidental en iOS
+        document.addEventListener('gesturestart', function(e) {
+            e.preventDefault();
+        });
+    </script>
+</body>
+</html>
