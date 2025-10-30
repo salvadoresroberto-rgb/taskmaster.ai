@@ -739,6 +739,20 @@
                                 </div>
                                 <div className="flex gap-2">
                                     <button 
+                                        onClick={() => {
+                                            if (navigator.serviceWorker && navigator.serviceWorker.controller) {
+                                                navigator.serviceWorker.controller.postMessage({ type: 'FORCE_UPDATE' });
+                                                setTimeout(() => window.location.reload(), 1000);
+                                            } else {
+                                                window.location.reload(true);
+                                            }
+                                        }}
+                                        className="px-4 py-2 bg-green-600 text-white rounded-lg hover:shadow-lg transition-all"
+                                        title="Forzar actualización de la app"
+                                    >
+                                        🔄 Actualizar
+                                    </button>
+                                    <button 
                                         onClick={sortTasksByAI}
                                         className="px-4 py-2 bg-gradient-to-r from-purple-600 to-blue-600 text-white rounded-lg hover:shadow-lg transition-all"
                                     >
